@@ -3,14 +3,28 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Switch } f
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 
 export default function PatientParametresScreen() {
   const router = useRouter();
   const { user, signOut } = useAuth();
+  const { theme, setTheme, isDark, colors } = useTheme();
+  
   const [notifications, setNotifications] = useState(true);
   const [rappelMedicament, setRappelMedicament] = useState(false);
-  const [modeSombre, setModeSombre] = useState(false);
   const [partagerDonnees, setPartagerDonnees] = useState(true);
+
+  const getThemeLabel = () => {
+    if (theme === 'light') return 'Clair';
+    if (theme === 'dark') return 'Sombre';
+    return 'Système';
+  };
+
+  const handleThemeChange = () => {
+    if (theme === 'light') setTheme('dark');
+    else if (theme === 'dark') setTheme('system');
+    else setTheme('light');
+  };
 
   const handleSignOut = () => {
     Alert.alert(
@@ -35,144 +49,151 @@ export default function PatientParametresScreen() {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
+    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#844567" />
+          <Ionicons name="arrow-back" size={24} color={colors.primary} />
         </TouchableOpacity>
-        <Text style={styles.title}>Paramètres</Text>
+        <Text style={[styles.title, { color: colors.primary }]}>Paramètres</Text>
         <View style={{ width: 40 }} />
       </View>
 
-      {/* Profil */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Compte</Text>
-        <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/patient/profil')}>
+      {/* Compte */}
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Compte</Text>
+        
+        <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/patient/modifier-profil')}>
           <View style={styles.menuLeft}>
-            <Ionicons name="person-circle-outline" size={24} color="#844567" />
-            <Text style={styles.menuText}>Mon profil</Text>
+            <Ionicons name="person-circle-outline" size={24} color={colors.primary} />
+            <Text style={[styles.menuText, { color: colors.text }]}>Modifier mon profil</Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#ccc" />
+          <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/patient/carnet')}>
           <View style={styles.menuLeft}>
-            <Ionicons name="heart-outline" size={24} color="#5aadbf" />
-            <Text style={styles.menuText}>Carnet de santé</Text>
+            <Ionicons name="heart-outline" size={24} color={colors.primary} />
+            <Text style={[styles.menuText, { color: colors.text }]}>Carnet de santé</Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#ccc" />
+          <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
         </TouchableOpacity>
       </View>
 
       {/* Notifications */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Notifications</Text>
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Notifications</Text>
+        
         <View style={styles.switchItem}>
           <View style={styles.menuLeft}>
-            <Ionicons name="notifications-outline" size={24} color="#844567" />
-            <Text style={styles.menuText}>Notifications push</Text>
+            <Ionicons name="notifications-outline" size={24} color={colors.primary} />
+            <Text style={[styles.menuText, { color: colors.text }]}>Notifications push</Text>
           </View>
           <Switch
             value={notifications}
             onValueChange={setNotifications}
             trackColor={{ false: '#ddd', true: '#5aadbf' }}
-            thumbColor={notifications ? '#844567' : '#f4f3f4'}
+            thumbColor={notifications ? colors.primary : '#f4f3f4'}
           />
         </View>
+        
         <View style={styles.switchItem}>
           <View style={styles.menuLeft}>
-            <Ionicons name="medkit-outline" size={24} color="#5aadbf" />
-            <Text style={styles.menuText}>Rappel de médicaments</Text>
+            <Ionicons name="medkit-outline" size={24} color={colors.primary} />
+            <Text style={[styles.menuText, { color: colors.text }]}>Rappel de médicaments</Text>
           </View>
           <Switch
             value={rappelMedicament}
             onValueChange={setRappelMedicament}
             trackColor={{ false: '#ddd', true: '#5aadbf' }}
-            thumbColor={rappelMedicament ? '#844567' : '#f4f3f4'}
+            thumbColor={rappelMedicament ? colors.primary : '#f4f3f4'}
           />
         </View>
       </View>
 
-      {/* Apparence */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Apparence</Text>
-        <View style={styles.switchItem}>
+      {/* Apparence - MODE SOMBRE */}
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Apparence</Text>
+        
+        <TouchableOpacity style={styles.menuItem} onPress={handleThemeChange}>
           <View style={styles.menuLeft}>
-            <Ionicons name="moon-outline" size={24} color="#844567" />
-            <Text style={styles.menuText}>Mode sombre</Text>
+            <Ionicons name={isDark ? "moon" : "sunny-outline"} size={24} color={colors.primary} />
+            <Text style={[styles.menuText, { color: colors.text }]}>Mode sombre</Text>
           </View>
-          <Switch
-            value={modeSombre}
-            onValueChange={setModeSombre}
-            trackColor={{ false: '#ddd', true: '#5aadbf' }}
-            thumbColor={modeSombre ? '#844567' : '#f4f3f4'}
-          />
-        </View>
+          <View style={styles.menuRight}>
+            <Text style={[styles.themeLabel, { color: colors.textSecondary }]}>{getThemeLabel()}</Text>
+            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+          </View>
+        </TouchableOpacity>
       </View>
 
       {/* Confidentialité */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Confidentialité</Text>
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Confidentialité</Text>
+        
         <View style={styles.switchItem}>
           <View style={styles.menuLeft}>
-            <Ionicons name="shield-outline" size={24} color="#844567" />
-            <Text style={styles.menuText}>Partager mes données médicales</Text>
+            <Ionicons name="shield-outline" size={24} color={colors.primary} />
+            <Text style={[styles.menuText, { color: colors.text }]}>Partager mes données médicales</Text>
           </View>
           <Switch
             value={partagerDonnees}
             onValueChange={setPartagerDonnees}
             trackColor={{ false: '#ddd', true: '#5aadbf' }}
-            thumbColor={partagerDonnees ? '#844567' : '#f4f3f4'}
+            thumbColor={partagerDonnees ? colors.primary : '#f4f3f4'}
           />
         </View>
+        
         <TouchableOpacity style={styles.menuItem}>
           <View style={styles.menuLeft}>
-            <Ionicons name="document-text-outline" size={24} color="#844567" />
-            <Text style={styles.menuText}>Politique de confidentialité</Text>
+            <Ionicons name="document-text-outline" size={24} color={colors.primary} />
+            <Text style={[styles.menuText, { color: colors.text }]}>Politique de confidentialité</Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#ccc" />
+          <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
         </TouchableOpacity>
+        
         <TouchableOpacity style={styles.menuItem}>
           <View style={styles.menuLeft}>
-            <Ionicons name="code-outline" size={24} color="#844567" />
-            <Text style={styles.menuText}>Conditions d'utilisation</Text>
+            <Ionicons name="code-outline" size={24} color={colors.primary} />
+            <Text style={[styles.menuText, { color: colors.text }]}>Conditions d'utilisation</Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#ccc" />
+          <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
         </TouchableOpacity>
       </View>
 
       {/* Support */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Support</Text>
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Support</Text>
+        
         <TouchableOpacity style={styles.menuItem}>
           <View style={styles.menuLeft}>
-            <Ionicons name="chatbubbles-outline" size={24} color="#844567" />
-            <Text style={styles.menuText}>Centre d'aide</Text>
+            <Ionicons name="chatbubbles-outline" size={24} color={colors.primary} />
+            <Text style={[styles.menuText, { color: colors.text }]}>Centre d'aide</Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#ccc" />
+          <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
         </TouchableOpacity>
+        
         <TouchableOpacity style={styles.menuItem}>
           <View style={styles.menuLeft}>
-            <Ionicons name="information-circle-outline" size={24} color="#844567" />
-            <Text style={styles.menuText}>À propos</Text>
+            <Ionicons name="information-circle-outline" size={24} color={colors.primary} />
+            <Text style={[styles.menuText, { color: colors.text }]}>À propos</Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#ccc" />
+          <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
         </TouchableOpacity>
       </View>
 
       {/* Version */}
       <View style={styles.versionContainer}>
-        <Text style={styles.versionText}>Version 1.0.0</Text>
+        <Text style={[styles.versionText, { color: colors.textSecondary }]}>Version 1.0.0</Text>
       </View>
 
       {/* Déconnexion */}
-      <TouchableOpacity style={styles.logoutButton} onPress={handleSignOut}>
+      <TouchableOpacity style={[styles.logoutButton, { backgroundColor: colors.primary }]} onPress={handleSignOut}>
         <Ionicons name="log-out-outline" size={22} color="#fff" />
         <Text style={styles.logoutText}>Se déconnecter</Text>
       </TouchableOpacity>
 
       {/* Supprimer le compte */}
-      <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteAccount}>
+      <TouchableOpacity style={[styles.deleteButton, { backgroundColor: colors.surface, borderColor: '#ff4444' }]} onPress={handleDeleteAccount}>
         <Ionicons name="trash-outline" size={22} color="#ff4444" />
         <Text style={styles.deleteText}>Supprimer mon compte</Text>
       </TouchableOpacity>
@@ -185,7 +206,6 @@ export default function PatientParametresScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   header: {
     flexDirection: 'row',
@@ -194,9 +214,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 16,
-    backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
   },
   backButton: {
     padding: 4,
@@ -204,20 +222,16 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#844567',
   },
   section: {
-    backgroundColor: '#fff',
     marginTop: 16,
     paddingVertical: 8,
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: '#eee',
   },
   sectionTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#999',
     marginLeft: 16,
     marginBottom: 8,
     marginTop: 8,
@@ -241,9 +255,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
+  menuRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   menuText: {
     fontSize: 16,
-    color: '#333',
+  },
+  themeLabel: {
+    fontSize: 14,
   },
   versionContainer: {
     alignItems: 'center',
@@ -252,10 +273,8 @@ const styles = StyleSheet.create({
   },
   versionText: {
     fontSize: 12,
-    color: '#999',
   },
   logoutButton: {
-    backgroundColor: '#844567',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -271,7 +290,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   deleteButton: {
-    backgroundColor: '#fff',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -280,7 +298,6 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#ff4444',
     gap: 8,
   },
   deleteText: {

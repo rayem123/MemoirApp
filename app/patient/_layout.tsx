@@ -2,12 +2,14 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { ActivityIndicator, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 function PatientTabs() {
   const insets = useSafeAreaInsets();
   const { user, role } = useAuth();
+  const { colors, isDark } = useTheme();
 
   // ✅ Rediriger vers la page de connexion si non patient
   if (!user || role !== 'patient') {
@@ -17,16 +19,16 @@ function PatientTabs() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#844567',
-        tabBarInactiveTintColor: '#666',
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textSecondary,
         tabBarStyle: {
-          backgroundColor: '#fff',
+          backgroundColor: colors.surface,
           paddingBottom: insets.bottom + 5,
           height: 55 + insets.bottom,
           borderTopWidth: 1,
-          borderTopColor: '#eee',
+          borderTopColor: colors.border,
         },
-        headerStyle: { backgroundColor: '#844567' },
+        headerStyle: { backgroundColor: colors.primary },
         headerTintColor: '#fff',
       }}
     >
@@ -36,22 +38,26 @@ function PatientTabs() {
       <Tabs.Screen name="profil" options={{ title: 'Profil', tabBarIcon: ({ color }) => <Ionicons name="person-outline" size={24} color={color} /> }} />
       <Tabs.Screen name="parametres" options={{ title: 'Paramètres', tabBarIcon: ({ color }) => <Ionicons name="settings-outline" size={24} color={color} /> }} />
       
-      {/* Pages cachées */}
+      {/* Pages cachées - NE S'AFFICHENT PAS DANS LA BARRE */}
       <Tabs.Screen name="carnet" options={{ href: null }} />
       <Tabs.Screen name="choix-soins" options={{ href: null }} />
       <Tabs.Screen name="symptomes" options={{ href: null }} />
       <Tabs.Screen name="recap-demande" options={{ href: null }} />
+      <Tabs.Screen name="modifier-profil" options={{ href: null }} />
+      <Tabs.Screen name="resultats-intervention" options={{ href: null }} />
+      <Tabs.Screen name="notifications" options={{ href: null }} />
     </Tabs>
   );
 }
 
 export default function PatientLayout() {
   const { isLoading } = useAuth();
+  const { colors } = useTheme();
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#844567" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }

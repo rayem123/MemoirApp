@@ -1,283 +1,278 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../context/ThemeContext';
 
-// Types de symptômes prédéfinis selon le type de soin
-const symptomesParSoin: Record<string, string[]> = {
-  consultation: [
-    'Fièvre', 'Toux', 'Maux de tête', 'Douleur thoracique', 'Essoufflement',
-    'Nausées', 'Fatigue', 'Douleur abdominale', 'Courbatures', 'Vertiges'
-  ],
-  'soin-plaie': [
-    'Plaie ouverte', 'Plaie infectée', 'Plaie qui saigne', 'Plaie post-opératoire',
-    'Escarre', 'Brûlure', 'Cicatrice qui s\'ouvre'
-  ],
-  injection: [
-    'Besoin de vaccin', 'Rappel vaccinal', 'Traitement injectable', 'Allergie connue', 'Douleur au point d\'injection'
-  ],
-  perfusion: [
-    'Déshydratation', 'Traitement IV', 'Fatigue extrême', 'Malabsorption', 'Nausées persistantes'
-  ],
-  prelevement: [
-    'Prise de sang de routine', 'Contrôle glycémie', 'Bilan lipidique', 'Dosage hormonal', 'Fatigue inhabituelle'
-  ],
-  surveillance: [
-    'Suivi post-opératoire', 'Surveillance tension', 'Surveillance cicatrisation',
-    'Prévention complications', 'Fièvre post-opératoire'
-  ],
-  reeducation: [
-    'Rééducation post-opératoire', 'Rééducation neurologique', 'Perte de mobilité',
-    'Douleur articulaire', 'Rééducation respiratoire', 'Difficulté à marcher'
-  ],
+const elementsParSoin = {
+  consultation: {
+    title: 'Symptômes',
+    items: ['Fièvre', 'Toux', 'Maux de tête', 'Douleur thoracique', 'Essoufflement', 'Nausées', 'Fatigue', 'Douleur abdominale', 'Courbatures', 'Vertiges'],
+    showIntensite: true,
+    showDuree: true,
+  },
+  'soin-plaie': {
+    title: 'État de la plaie',
+    items: ['Plaie ouverte', 'Plaie infectée', 'Plaie qui saigne', 'Plaie post-op', 'Escarre', 'Brûlure', 'Cicatrice ouverte', 'Œdème', 'Rougeur', 'Suppuration'],
+    showIntensite: false,
+    showDuree: false,
+  },
+  injection: {
+    title: 'Type d\'injection',
+    items: ['Vaccin COVID-19', 'Vaccin Grippe', 'Vaccin Hépatite B', 'Vaccin Tétanos', 'Vitamine B12', 'Vitamine D', 'Vitamine C', 'Insuline', 'Antibiotique', 'Anti-douleur'],
+    showIntensite: false,
+    showDuree: false,
+  },
+  perfusion: {
+    title: 'Type de perfusion',
+    items: ['Perfusion réhydratation', 'Perfusion antibiotiques', 'Perfusion chimiothérapie', 'Perfusion douleur', 'Perfusion nutriments', 'Perfusion sang'],
+    showIntensite: false,
+    showDuree: false,
+  },
+  prelevement: {
+    title: 'Type de prélèvement',
+    items: ['Prise de sang', 'Glycémie', 'Bilan lipidique', 'Bilan hépatique', 'Dosage hormonal', 'Prélèvement urinaire', 'Prélèvement nasal', 'Test COVID'],
+    showIntensite: false,
+    showDuree: false,
+  },
+  surveillance: {
+    title: 'Éléments à surveiller',
+    items: ['Tension artérielle', 'Température', 'Cicatrice post-op', 'Respiration', 'Rythme cardiaque', 'Glycémie', 'Douleur', 'Œdème'],
+    showIntensite: false,
+    showDuree: false,
+  },
+  reeducation: {
+    title: 'Type de rééducation',
+    items: ['Post-opératoire', 'Neurologique', 'Respiratoire', 'Cardiaque', 'Orthopédique', 'Périnéale'],
+    showIntensite: false,
+    showDuree: false,
+  }
 };
 
 const niveauxIntensite = ['faible', 'modérée', 'forte', 'très forte'];
 
 export default function SymptomesScreen() {
   const router = useRouter();
-  const { typeSoin, typeSoinNom } = useLocalSearchParams<{ typeSoin: string; typeSoinNom: string }>();
+  const { colors } = useTheme();
+  const params = useLocalSearchParams();
+  const { typeSoin, typeSoinNom, latitude, longitude, adresse } = params;
+  
   const [description, setDescription] = useState('');
-  const [symptomesData, setSymptomesData] = useState<Record<string, { intensite: string; duree: string }>>({});
+  const [selectedItems, setSelectedItems] = useState([]);
+  const [intensiteData, setIntensiteData] = useState({});
+  const [dureeData, setDureeData] = useState({});
 
-  const symptomesList = symptomesParSoin[typeSoin] || symptomesParSoin.consultation;
+  // Stocker la géolocalisation pour l'envoyer plus tard
+  const [geoData, setGeoData] = useState({
+    latitude: latitude || null,
+    longitude: longitude || null,
+    adresse: adresse || null
+  });
 
-  const ajouterSymptome = (symptome: string) => {
-    setSymptomesData({
-      ...symptomesData,
-      [symptome]: { intensite: 'modérée', duree: '' }
-    });
+  const config = elementsParSoin[typeSoin] || elementsParSoin.consultation;
+  const itemsList = config.items;
+  const title = config.title;
+  const showIntensite = config.showIntensite;
+  const showDuree = config.showDuree;
+
+  useEffect(() => {
+    setDescription('');
+    setSelectedItems([]);
+    setIntensiteData({});
+    setDureeData({});
+  }, [typeSoin]);
+
+  useFocusEffect(
+    useCallback(() => {
+      setDescription('');
+      setSelectedItems([]);
+      setIntensiteData({});
+      setDureeData({});
+    }, [])
+  );
+
+  const toggleItem = (item) => {
+    if (selectedItems.includes(item)) {
+      setSelectedItems(selectedItems.filter(i => i !== item));
+      const newIntensite = { ...intensiteData };
+      const newDuree = { ...dureeData };
+      delete newIntensite[item];
+      delete newDuree[item];
+      setIntensiteData(newIntensite);
+      setDureeData(newDuree);
+    } else {
+      setSelectedItems([...selectedItems, item]);
+      setIntensiteData({ ...intensiteData, [item]: 'modérée' });
+      setDureeData({ ...dureeData, [item]: '' });
+    }
   };
 
-  const supprimerSymptome = (symptome: string) => {
-    const newData = { ...symptomesData };
-    delete newData[symptome];
-    setSymptomesData(newData);
+  const updateIntensite = (item, intensite) => {
+    setIntensiteData({ ...intensiteData, [item]: intensite });
   };
 
-  const isSymptomeSelected = (symptome: string) => {
-    return symptomesData.hasOwnProperty(symptome);
-  };
-
-  const updateIntensite = (symptome: string, intensite: string) => {
-    setSymptomesData({
-      ...symptomesData,
-      [symptome]: { ...symptomesData[symptome], intensite }
-    });
-  };
-
-  const updateDuree = (symptome: string, duree: string) => {
-    setSymptomesData({
-      ...symptomesData,
-      [symptome]: { ...symptomesData[symptome], duree }
-    });
+  const updateDuree = (item, duree) => {
+    setDureeData({ ...dureeData, [item]: duree });
   };
 
   const handleSubmit = () => {
-    const symptomesSelectionnes = Object.keys(symptomesData);
-    
-    if (symptomesSelectionnes.length === 0 && !description) {
-      Alert.alert('Erreur', 'Veuillez sélectionner au moins un symptôme');
+    if (selectedItems.length === 0 && !description) {
+      Alert.alert('Erreur', 'Veuillez sélectionner au moins un élément');
       return;
     }
 
-    const symptomesJSON = JSON.stringify(symptomesData);
-    
-    router.push({
-      pathname: '/patient/recap-demande',
-      params: {
-        typeSoin,
-        typeSoinNom,
-        symptomes: symptomesJSON,
-        description,
-      }
+    // Construire l'objet avec les données complètes
+    const itemsWithDetails = {};
+    selectedItems.forEach(item => {
+      itemsWithDetails[item] = {
+        intensite: showIntensite ? intensiteData[item] || '' : '',
+        duree: showDuree ? dureeData[item] || '' : ''
+      };
     });
+
+    const itemsString = JSON.stringify(itemsWithDetails);
+    const itemsEncoded = encodeURIComponent(itemsString);
+    const descEncoded = encodeURIComponent(description);
+    const adresseEncoded = encodeURIComponent(geoData.adresse || '');
+    const latitudeValue = geoData.latitude || '';
+    const longitudeValue = geoData.longitude || '';
+
+    // Transmettre la géolocalisation à l'écran suivant
+    router.push(`/patient/recap-demande?typeSoin=${typeSoin}&typeSoinNom=${typeSoinNom}&selectedItems=${itemsEncoded}&description=${descEncoded}&latitude=${latitudeValue}&longitude=${longitudeValue}&adresse=${adresseEncoded}`);
   };
 
-  const renderSymptomeItem = (symptome: string) => {
-    const isSelected = isSymptomeSelected(symptome);
+  const renderItemWithDetails = (item) => {
+    const isSelected = selectedItems.includes(item);
     
     if (!isSelected) {
       return (
         <TouchableOpacity
-          key={symptome}
-          style={styles.symptomeCard}
-          onPress={() => ajouterSymptome(symptome)}
+          key={item}
+          style={[styles.itemCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          onPress={() => toggleItem(item)}
         >
-          <View style={styles.symptomeHeader}>
-            <Ionicons name="add-circle-outline" size={24} color="#844567" />
-            <Text style={styles.symptomeNom}>{symptome}</Text>
+          <View style={styles.itemRow}>
+            <Ionicons name="add-circle-outline" size={24} color={colors.primary} />
+            <Text style={[styles.itemText, { color: colors.text }]}>{item}</Text>
           </View>
         </TouchableOpacity>
       );
     }
 
     return (
-      <View key={symptome} style={styles.symptomeCardSelected}>
-        <View style={styles.symptomeHeader}>
-          <Text style={styles.symptomeNomSelected}>{symptome}</Text>
-          <TouchableOpacity onPress={() => supprimerSymptome(symptome)}>
+      <View key={item} style={[styles.itemCardSelected, { backgroundColor: colors.primary + '15', borderColor: colors.primary }]}>
+        <View style={styles.itemHeader}>
+          <Text style={[styles.itemTextSelected, { color: colors.primary }]}>{item}</Text>
+          <TouchableOpacity onPress={() => toggleItem(item)}>
             <Ionicons name="close-circle" size={22} color="#ff4444" />
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.sousLabel}>Intensité :</Text>
-        <View style={styles.intensiteContainer}>
-          {niveauxIntensite.map((niveau) => (
-            <TouchableOpacity
-              key={niveau}
-              style={[
-                styles.intensiteButton,
-                symptomesData[symptome].intensite === niveau && styles.intensiteButtonActive
-              ]}
-              onPress={() => updateIntensite(symptome, niveau)}
-            >
-              <Text style={[
-                styles.intensiteText,
-                symptomesData[symptome].intensite === niveau && styles.intensiteTextActive
-              ]}>{niveau}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {showIntensite && (
+          <>
+            <Text style={[styles.sousLabel, { color: colors.textSecondary }]}>Intensité :</Text>
+            <View style={styles.intensiteContainer}>
+              {niveauxIntensite.map((niveau) => (
+                <TouchableOpacity
+                  key={niveau}
+                  style={[
+                    styles.intensiteButton,
+                    { borderColor: colors.border },
+                    intensiteData[item] === niveau && styles.intensiteButtonActive
+                  ]}
+                  onPress={() => updateIntensite(item, niveau)}
+                >
+                  <Text style={[
+                    styles.intensiteText,
+                    { color: colors.text },
+                    intensiteData[item] === niveau && styles.intensiteTextActive
+                  ]}>{niveau}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        )}
 
-        <Text style={styles.sousLabel}>Durée :</Text>
-        <TextInput
-          style={styles.dureeInput}
-          placeholder="Ex: 2 jours, 1 semaine..."
-          value={symptomesData[symptome].duree}
-          onChangeText={(text) => updateDuree(symptome, text)}
-        />
+        {showDuree && (
+          <>
+            <Text style={[styles.sousLabel, { color: colors.textSecondary }]}>Durée :</Text>
+            <TextInput
+              style={[styles.dureeInput, { borderColor: colors.border, backgroundColor: colors.surface, color: colors.text }]}
+              placeholder="Ex: 2 jours, 1 semaine..."
+              placeholderTextColor={colors.textSecondary}
+              value={dureeData[item]}
+              onChangeText={(text) => updateDuree(item, text)}
+            />
+          </>
+        )}
       </View>
     );
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.scrollContainer}>
-      <View style={styles.container}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#844567" />
-        </TouchableOpacity>
-        
-        <Text style={styles.title}>Description des symptômes</Text>
-        <Text style={styles.subtitle}>Soin demandé : {typeSoinNom}</Text>
+    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
+      <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <Ionicons name="arrow-back" size={24} color={colors.primary} />
+      </TouchableOpacity>
+      
+      <Text style={[styles.title, { color: colors.primary }]}>{title}</Text>
+      <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Soin : {typeSoinNom}</Text>
 
-        <Text style={styles.label}>Ajoutez vos symptômes :</Text>
-        <View style={styles.symptomesList}>
-          {symptomesList.map((symptome) => renderSymptomeItem(symptome))}
+      {/* Affichage de la localisation si disponible */}
+      {geoData.adresse && (
+        <View style={[styles.locationBadge, { backgroundColor: colors.primary + '15' }]}>
+          <Ionicons name="location-outline" size={16} color={colors.primary} />
+          <Text style={[styles.locationText, { color: colors.primary }]} numberOfLines={1}>
+            {geoData.adresse}
+          </Text>
         </View>
+      )}
 
-        <Text style={styles.label}>Description complémentaire :</Text>
-        <TextInput
-          style={[styles.input, { minHeight: 80 }]}
-          placeholder="Décrivez précisément votre situation, localisation, évolution..."
-          value={description}
-          onChangeText={setDescription}
-          multiline
-          numberOfLines={4}
-          textAlignVertical="top"
-        />
+      <Text style={[styles.label, { color: colors.text }]}>Sélectionnez :</Text>
+      
+      {itemsList.map((item) => renderItemWithDetails(item))}
 
-        <TouchableOpacity style={styles.button} onPress={handleSubmit}>
-          <Text style={styles.buttonText}>Continuer</Text>
-        </TouchableOpacity>
-      </View>
+      <Text style={[styles.label, { color: colors.text }]}>Description :</Text>
+      <TextInput
+        style={[styles.input, { borderColor: colors.border, backgroundColor: colors.surface, color: colors.text }]}
+        placeholder="Description complémentaire..."
+        placeholderTextColor={colors.textSecondary}
+        value={description}
+        onChangeText={setDescription}
+        multiline
+        numberOfLines={4}
+        textAlignVertical="top"
+      />
+
+      <TouchableOpacity style={[styles.button, { backgroundColor: colors.primary }]} onPress={handleSubmit}>
+        <Text style={styles.buttonText}>Continuer</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollContainer: { flexGrow: 1, backgroundColor: '#fff', paddingVertical: 20 },
   container: { flex: 1, padding: 20 },
-  backButton: { position: 'absolute', top: 10, left: 20, zIndex: 10 },
-  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 10, textAlign: 'center', color: '#844567', marginTop: 20 },
-  subtitle: { fontSize: 14, color: '#666', textAlign: 'center', marginBottom: 20 },
-  label: { fontSize: 16, fontWeight: '600', color: '#333', marginBottom: 10, marginTop: 15 },
-  sousLabel: { fontSize: 14, fontWeight: '500', color: '#666', marginBottom: 5, marginTop: 8 },
-  symptomesList: { flexDirection: 'column', gap: 12 },
-  symptomeCard: {
-    backgroundColor: '#f9f9f9',
-    borderRadius: 10,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    marginBottom: 8,
-  },
-  symptomeCardSelected: {
-    backgroundColor: '#f0e6f0',
-    borderRadius: 10,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#844567',
-    marginBottom: 12,
-  },
-  symptomeHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  symptomeNom: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-  },
-  symptomeNomSelected: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#844567',
-  },
-  intensiteContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-    gap: 8,
-  },
-  intensiteButton: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    alignItems: 'center',
-  },
-  intensiteButtonActive: {
-    backgroundColor: '#5aadbf',
-    borderColor: '#5aadbf',
-  },
-  intensiteText: {
-    fontSize: 12,
-    color: '#333',
-  },
-  intensiteTextActive: {
-    color: '#fff',
-  },
-  dureeInput: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 10,
-    fontSize: 14,
-    marginTop: 5,
-    marginBottom: 5,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    marginBottom: 15,
-  },
-  button: {
-    backgroundColor: '#844567',
-    paddingVertical: 14,
-    borderRadius: 8,
-    marginTop: 20,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
+  backButton: { marginBottom: 10 },
+  title: { fontSize: 24, fontWeight: 'bold', textAlign: 'center', marginBottom: 10 },
+  subtitle: { fontSize: 14, textAlign: 'center', marginBottom: 20 },
+  label: { fontSize: 16, fontWeight: '600', marginBottom: 10, marginTop: 15 },
+  sousLabel: { fontSize: 14, fontWeight: '500', marginBottom: 5, marginTop: 8 },
+  itemCard: { borderRadius: 10, padding: 12, borderWidth: 1, marginBottom: 8 },
+  itemCardSelected: { borderRadius: 10, padding: 12, borderWidth: 1, marginBottom: 12 },
+  itemRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  itemHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  itemText: { fontSize: 16, fontWeight: '500' },
+  itemTextSelected: { fontSize: 16, fontWeight: '600' },
+  intensiteContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10, gap: 8 },
+  intensiteButton: { flex: 1, paddingVertical: 8, borderRadius: 20, borderWidth: 1, alignItems: 'center' },
+  intensiteButtonActive: { backgroundColor: '#5aadbf', borderColor: '#5aadbf' },
+  intensiteText: { fontSize: 12 },
+  intensiteTextActive: { color: '#fff' },
+  dureeInput: { borderWidth: 1, borderRadius: 8, padding: 10, fontSize: 14, marginTop: 5, marginBottom: 5 },
+  input: { borderWidth: 1, borderRadius: 8, padding: 12, fontSize: 16, marginBottom: 15, minHeight: 80 },
+  button: { paddingVertical: 14, borderRadius: 8, marginTop: 20 },
+  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600', textAlign: 'center' },
+  locationBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, alignSelf: 'flex-start', marginBottom: 10 },
+  locationText: { fontSize: 12, fontWeight: '500', flexShrink: 1 },
 });

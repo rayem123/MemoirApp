@@ -9,7 +9,13 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "e-HomeCare a besoin de votre position pour vous proposer des professionnels à proximité.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "e-HomeCare a besoin de votre position pour vous proposer des professionnels à proximité.",
+        "NSPhotoLibraryUsageDescription": "e-HomeCare a besoin d'accéder à vos photos pour ajouter des images.",
+        "NSCameraUsageDescription": "e-HomeCare a besoin d'accéder à votre appareil photo pour prendre des photos."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -19,7 +25,15 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.POST_NOTIFICATIONS"
+      ]
     },
     "web": {
       "output": "static",
@@ -36,6 +50,41 @@
           "backgroundColor": "#ffffff",
           "dark": {
             "backgroundColor": "#000000"
+          }
+        }
+      ],
+      "@react-native-community/datetimepicker",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "e-HomeCare a besoin de votre position pour vous proposer des professionnels à proximité.",
+          "locationWhenInUsePermission": "e-HomeCare a besoin de votre position pour vous proposer des professionnels à proximité."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "e-HomeCare a besoin d'accéder à vos photos pour ajouter des images.",
+          "cameraPermission": "e-HomeCare a besoin d'accéder à votre appareil photo pour prendre des photos."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#844567"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 34,
+            "targetSdkVersion": 34,
+            "buildToolsVersion": "34.0.0"
+          },
+          "ios": {
+            "deploymentTarget": "15.1"
           }
         }
       ]

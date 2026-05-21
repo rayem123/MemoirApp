@@ -4,17 +4,18 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../lib/supabase';
+import { useTheme } from '../context/ThemeContext';
 
 export default function AddPostScreen() {
   const router = useRouter();
+  const { colors } = useTheme();
   const [user, setUser] = useState<any>(null);
   const [professionnelId, setProfessionnelId] = useState<string | null>(null);
   const [content, setContent] = useState('');
-  const [image, setImage] = useState<string | null>(null);
+  const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
-  // Récupérer l'utilisateur connecté et son professionnel_id
   useEffect(() => {
     const getUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -26,7 +27,6 @@ export default function AddPostScreen() {
           .single();
         setUser(userData);
         
-        // Récupérer le professionnel_id (nécessaire pour publication)
         if (userData?.role !== 'patient') {
           const { data: proData } = await supabase
             .from('professionnel_sante')
@@ -48,48 +48,25 @@ export default function AddPostScreen() {
       Alert.alert('Permission refusée', 'Nous avons besoin de la permission pour accéder à vos photos.');
       return;
     }
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 0.8,
-    });
-    if (!result.canceled) setImage(result.assets[0].uri);
-  };
-
-  const uploadImage = async (): Promise<string | null> => {
-    if (!image) return null;
     
     setIsUploading(true);
-    try {
-      const response = await fetch(image);
-      const blob = await response.blob();
-      const fileExt = image.split('.').pop() || 'jpg';
-      const fileName = `${Date.now()}.${fileExt}`;
-      const filePath = `publications/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('publications')
-        .upload(filePath, blob, {
-          contentType: `image/${fileExt}`,
-          upsert: true,
-        });
-
-      if (uploadError) {
-        console.log('Upload error:', uploadError);
-        return null;
+    
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      quality: 0.5,
+      base64: true,
+    });
+    
+    if (!result.canceled && result.assets && result.assets[0]) {
+      const base64 = result.assets[0].base64;
+      if (base64) {
+        const imageDataUrl = `data:image/jpeg;base64,${base64}`;
+        setImageBase64(imageDataUrl);
       }
-
-      const { data: urlData } = supabase.storage
-        .from('publications')
-        .getPublicUrl(filePath);
-
-      return urlData.publicUrl;
-    } catch (err) {
-      console.log('Erreur upload:', err);
-      return null;
-    } finally {
-      setIsUploading(false);
     }
+    
+    setIsUploading(false);
   };
 
   const handlePublish = async () => {
@@ -106,23 +83,20 @@ export default function AddPostScreen() {
     setIsLoading(true);
     
     try {
-      // 1. Upload de l'image si elle existe
-      let imageUrl = null;
-      if (image) {
-        imageUrl = await uploadImage();
+      const publicationData: any = {
+        contenu: content.trim(),
+        professionnel_id: professionnelId,
+      };
+      
+      if (imageBase64) {
+        publicationData.image_url = imageBase64;
       }
 
-      // 2. Créer la publication
       const { error: insertError } = await supabase
         .from('publication')
-        .insert({
-          contenu: content,
-          image_url: imageUrl,
-          professionnel_id: professionnelId,
-        });
+        .insert(publicationData);
 
       if (insertError) {
-        console.error('Erreur publication:', insertError);
         Alert.alert('Erreur', insertError.message);
         return;
       }
@@ -131,78 +105,161 @@ export default function AddPostScreen() {
       router.back();
       
     } catch (error: any) {
-      Alert.alert('Erreur', error.message);
+      Alert.alert('Erreur', error.message || 'Une erreur est survenue');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.scrollContainer}>
-      <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Header fixe */}
+      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#844567" />
+          <Ionicons name="arrow-back" size={24} color={colors.primary} />
         </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: colors.primary }]}>Nouvelle publication</Text>
+        <View style={{ width: 40 }} />
+      </View>
 
-        <Text style={styles.title}>Nouvelle publication</Text>
-
-        <Text style={styles.label}>Contenu :</Text>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <Text style={[styles.label, { color: colors.text }]}>Contenu :</Text>
         <TextInput
-          style={[styles.input, { minHeight: 120 }]}
+          style={[styles.input, { borderColor: colors.border, backgroundColor: colors.surface, color: colors.text }]}
           placeholder="Écrivez votre publication ici..."
+          placeholderTextColor={colors.textSecondary}
           value={content}
           onChangeText={setContent}
           multiline
           textAlignVertical="top"
         />
 
-        <TouchableOpacity style={styles.imageButton} onPress={pickImage}>
-          <Ionicons name="image-outline" size={24} color="#844567" />
-          <Text style={styles.imageButtonText}>Ajouter une image</Text>
+        <TouchableOpacity style={[styles.imageButton, { borderColor: colors.primary, backgroundColor: colors.surface }]} onPress={pickImage} disabled={isUploading}>
+          <Ionicons name="image-outline" size={24} color={colors.primary} />
+          <Text style={[styles.imageButtonText, { color: colors.primary }]}>
+            {isUploading ? 'Traitement...' : (imageBase64 ? 'Changer l\'image' : 'Ajouter une image')}
+          </Text>
         </TouchableOpacity>
         
         {isUploading && (
           <View style={styles.uploadingContainer}>
-            <ActivityIndicator size="small" color="#844567" />
-            <Text style={styles.uploadingText}>Téléchargement de l'image...</Text>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={[styles.uploadingText, { color: colors.textSecondary }]}>Traitement de l'image...</Text>
           </View>
         )}
 
-        {image && !isUploading && (
+        {imageBase64 && !isUploading && (
           <View style={styles.imagePreviewContainer}>
-            <Image source={{ uri: image }} style={styles.imagePreview} />
-            <TouchableOpacity style={styles.removeImage} onPress={() => setImage(null)}>
-              <Ionicons name="close-circle" size={24} color="#844567" />
+            <Image source={{ uri: imageBase64 }} style={styles.imagePreview} />
+            <TouchableOpacity style={styles.removeImage} onPress={() => setImageBase64(null)}>
+              <Ionicons name="close-circle" size={24} color="red" />
             </TouchableOpacity>
           </View>
         )}
 
-        <TouchableOpacity style={styles.publishButton} onPress={handlePublish} disabled={isLoading}>
+        <TouchableOpacity 
+          style={[styles.publishButton, { backgroundColor: colors.primary }]} 
+          onPress={handlePublish} 
+          disabled={isLoading || isUploading}
+        >
           {isLoading ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
             <Text style={styles.publishButtonText}>Publier</Text>
           )}
         </TouchableOpacity>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollContainer: { flexGrow: 1, backgroundColor: '#fff', paddingVertical: 20 },
-  container: { flex: 1, padding: 20 },
-  backButton: { position: 'absolute', top: 10, left: 20, zIndex: 10 },
-  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 30, textAlign: 'center', color: '#844567', marginTop: 20 },
-  label: { fontSize: 16, fontWeight: '600', color: '#333', marginBottom: 8, marginTop: 10 },
-  input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 12, fontSize: 16, marginBottom: 15 },
-  imageButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#844567', borderRadius: 8, paddingVertical: 12, marginBottom: 15 },
-  imageButtonText: { marginLeft: 8, fontSize: 16, color: '#844567' },
-  uploadingContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 15, padding: 10 },
-  uploadingText: { marginLeft: 8, color: '#666' },
-  imagePreviewContainer: { position: 'relative', marginBottom: 15 },
-  imagePreview: { width: '100%', height: 150, borderRadius: 8, backgroundColor: '#f0f0f0' },
-  removeImage: { position: 'absolute', top: 5, right: 5, backgroundColor: '#fff', borderRadius: 12 },
-  publishButton: { backgroundColor: '#844567', paddingVertical: 14, borderRadius: 8, marginTop: 20 },
-  publishButtonText: { color: '#fff', fontSize: 16, fontWeight: '600', textAlign: 'center' },
+  container: { 
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 50,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+  },
+  backButton: { 
+    padding: 8,
+  },
+  headerTitle: { 
+    fontSize: 20, 
+    fontWeight: 'bold',
+  },
+  scrollContent: { 
+    padding: 20, 
+    paddingBottom: 40,
+  },
+  label: { 
+    fontSize: 16, 
+    fontWeight: '600', 
+    marginBottom: 8,
+  },
+  input: { 
+    borderWidth: 1, 
+    borderRadius: 12, 
+    padding: 12, 
+    fontSize: 16, 
+    minHeight: 120,
+    textAlignVertical: 'top',
+    marginBottom: 20,
+  },
+  imageButton: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    borderWidth: 1, 
+    borderRadius: 12, 
+    paddingVertical: 12, 
+    marginBottom: 15, 
+    gap: 8,
+  },
+  imageButtonText: { 
+    fontSize: 16,
+  },
+  uploadingContainer: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    marginBottom: 15, 
+    gap: 8,
+  },
+  uploadingText: { 
+    fontSize: 12,
+  },
+  imagePreviewContainer: { 
+    position: 'relative', 
+    marginBottom: 15,
+  },
+  imagePreview: { 
+    width: '100%', 
+    height: 200, 
+    borderRadius: 12,
+  },
+  removeImage: { 
+    position: 'absolute', 
+    top: 8, 
+    right: 8, 
+    backgroundColor: 'rgba(0,0,0,0.6)', 
+    borderRadius: 15, 
+    padding: 2,
+  },
+  publishButton: { 
+    paddingVertical: 14, 
+    borderRadius: 12, 
+    marginTop: 20, 
+    alignItems: 'center',
+  },
+  publishButtonText: { 
+    color: '#fff', 
+    fontSize: 16, 
+    fontWeight: '600',
+  },
 });

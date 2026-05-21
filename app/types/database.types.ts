@@ -478,41 +478,6 @@ export type Database = {
           created_at?: string;
         };
       };
-      demande_intervention: {
-        Row: {
-          id: string;
-          date_demande: string;
-          motif: string | null;
-          statut: string;
-          patient_id: string;
-          professionnel_id: string;
-          intervention_id: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          date_demande?: string;
-          motif?: string | null;
-          statut?: string;
-          patient_id: string;
-          professionnel_id: string;
-          intervention_id?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          date_demande?: string;
-          motif?: string | null;
-          statut?: string;
-          patient_id?: string;
-          professionnel_id?: string;
-          intervention_id?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-      };
     };
     Views: {
       [_ in never]: never;

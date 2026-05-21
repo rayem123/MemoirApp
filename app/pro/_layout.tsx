@@ -2,17 +2,19 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { ActivityIndicator, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function ProLayout() {
   const { user, role, isLoading } = useAuth();
+  const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#844567" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -24,19 +26,30 @@ export default function ProLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#844567',
-        tabBarInactiveTintColor: '#666',
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textSecondary,
         tabBarStyle: { 
-          backgroundColor: '#fff',
-          paddingBottom: insets.bottom + 5,  // ✅ Espace dynamique selon le téléphone
+          backgroundColor: colors.surface,
+          paddingBottom: insets.bottom + 5,
           height: 60 + insets.bottom,
           borderTopWidth: 1,
-          borderTopColor: '#eee',
+          borderTopColor: colors.border,
         },
-        headerStyle: { backgroundColor: '#844567' },
-        headerTintColor: '#fff',
+        tabBarLabelStyle: {
+          fontSize: 12,
+        },
+        headerStyle: { 
+          backgroundColor: colors.surface,
+          shadowColor: colors.border,
+          elevation: 0,
+        },
+        headerTintColor: colors.text,
+        headerTitleStyle: {
+          fontWeight: '600',
+        },
       }}
     >
+      {/* Onglet Accueil */}
       <Tabs.Screen
         name="index"
         options={{
@@ -46,6 +59,8 @@ export default function ProLayout() {
           ),
         }}
       />
+
+      {/* Onglet Interventions - LE SEUL UTILE POUR LE PRO */}
       <Tabs.Screen
         name="interventions"
         options={{
@@ -55,15 +70,8 @@ export default function ProLayout() {
           ),
         }}
       />
-      <Tabs.Screen
-        name="carnet"
-        options={{
-          title: 'Carnet',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="heart-outline" size={size} color={color} />
-          ),
-        }}
-      />
+
+      {/* Onglet Profil */}
       <Tabs.Screen
         name="profil"
         options={{
@@ -73,10 +81,12 @@ export default function ProLayout() {
           ),
         }}
       />
-      <Tabs.Screen name="add-post" options={{ href: null, title: 'Ajouter une publication' }} />
-      <Tabs.Screen name="patient-dossier" options={{ href: null, title: 'Dossier patient' }} />
-      <Tabs.Screen name="carnet-patient" options={{ href: null, title: 'Carnet patient' }} />
-      <Tabs.Screen name="interventions-patient" options={{ href: null, title: 'Interventions patient' }} />
+      <Tabs.Screen name="parametres" options={{ title: 'Paramètres', tabBarIcon: ({ color }) => <Ionicons name="settings-outline" size={24} color={color} /> }} />
+
+      {/* Écrans cachés (non affichés dans la barre de navigation) */}
+      <Tabs.Screen name="intervention-details" options={{ href: null, title: 'Détails intervention' }} />
+      <Tabs.Screen name="modifier-profil" options={{ href: null, title: 'Modification de profil' }} />
+       <Tabs.Screen name="carnet_patient" options={{ href: null, title: 'carnet_patient' }} />
     </Tabs>
   );
 }
