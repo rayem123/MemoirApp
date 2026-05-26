@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, ScrollView, TextInput, Alert, Animated, RefreshControl, ActivityIndicator, Modal, FlatList } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, ScrollView, TextInput, Alert, Animated, RefreshControl, ActivityIndicator, Modal, FlatList, Keyboard, SafeAreaView, Platform, KeyboardAvoidingView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
@@ -51,6 +51,12 @@ export default function HomeScreen() {
   const [showCommentsModal, setShowCommentsModal] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
   const [newCommentText, setNewCommentText] = useState('');
+  const inputRef = useRef<TextInput>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
+  
+  const [fullImageVisible, setFullImageVisible] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const fabBottom = scrollY.interpolate({
     inputRange: [0, 100, 200],
@@ -76,6 +82,27 @@ export default function HomeScreen() {
     getUser();
   }, []);
 
+  // Écouter la hauteur du clavier
+  useEffect(() => {
+    const keyboardWillShow = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+      }
+    );
+    const keyboardWillHide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        setKeyboardHeight(0);
+      }
+    );
+
+    return () => {
+      keyboardWillShow.remove();
+      keyboardWillHide.remove();
+    };
+  }, []);
+
   const loadUserLikes = async (userId: string) => {
     const { data } = await supabase
       .from('like_publication')
@@ -94,9 +121,7 @@ export default function HomeScreen() {
       .select('*', { count: 'exact', head: true })
       .eq('publication_id', publicationId);
     
-    if (error) {
-      return 0;
-    }
+    if (error) return 0;
     return count || 0;
   };
 
@@ -106,9 +131,7 @@ export default function HomeScreen() {
       .select('*', { count: 'exact', head: true })
       .eq('publication_id', publicationId);
     
-    if (error) {
-      return 0;
-    }
+    if (error) return 0;
     return count || 0;
   };
 
@@ -258,6 +281,7 @@ export default function HomeScreen() {
     
     setNewCommentText('');
     await loadCommentaires(selectedPublicationId);
+    Keyboard.dismiss();
   };
 
   const handleLike = async (publicationId: string) => {
@@ -317,6 +341,14 @@ export default function HomeScreen() {
     setSelectedPublicationId(publicationId);
     setShowCommentsModal(true);
     await loadCommentaires(publicationId);
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 500);
+  };
+
+  const openFullImage = (imageUrl: string) => {
+    setSelectedImage(imageUrl);
+    setFullImageVisible(true);
   };
 
   useEffect(() => {
@@ -359,11 +391,6 @@ export default function HomeScreen() {
   const formatCommentDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-  };
-
-  // Vérifier si une URL est en Base64
-  const isBase64Image = (url: string) => {
-    return url && url.startsWith('data:image');
   };
 
   if (loading && !refreshing) {
@@ -429,14 +456,14 @@ export default function HomeScreen() {
 
               <Text style={[styles.postContent, { color: colors.text }]}>{pub.contenu}</Text>
               
-              {/* Affichage de l'image - support Base64 et URL */}
               {pub.image_url && (
-                <Image 
-                  source={{ uri: pub.image_url }} 
-                  style={styles.postImage}
-                  resizeMode="cover"
-                  onError={(e) => console.log('Erreur chargement image:', e.nativeEvent.error)}
-                />
+                <TouchableOpacity activeOpacity={0.9} onPress={() => openFullImage(pub.image_url!)}>
+                  <Image 
+                    source={{ uri: pub.image_url }} 
+                    style={styles.postImage}
+                    resizeMode="cover"
+                  />
+                </TouchableOpacity>
               )}
 
               <View style={[styles.postActions, { borderTopColor: colors.border }]}>
@@ -474,6 +501,7 @@ export default function HomeScreen() {
         </Animated.View>
       )}
 
+      {/* Modal Commentaires - avec KeyboardAvoidingView */}
       <Modal
         visible={showCommentsModal}
         animationType="slide"
@@ -481,26 +509,29 @@ export default function HomeScreen() {
         onRequestClose={() => {
           setShowCommentsModal(false);
           setNewCommentText('');
+          Keyboard.dismiss();
         }}
       >
-        <View style={styles.modalContainer}>
-          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
-            <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-              <Text style={[styles.modalTitle, { color: colors.primary }]}>Commentaires</Text>
-              <TouchableOpacity onPress={() => {
-                setShowCommentsModal(false);
-                setNewCommentText('');
-              }}>
-                <Ionicons name="close" size={24} color={colors.primary} />
-              </TouchableOpacity>
-            </View>
-
-            {loadingComments ? (
-              <View style={styles.commentsLoading}>
-                <ActivityIndicator size="large" color={colors.primary} />
+        <SafeAreaView style={styles.modalContainer}>
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.keyboardAvoidingView}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+          >
+            <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+              <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.modalTitle, { color: colors.primary }]}>Commentaires</Text>
+                <TouchableOpacity onPress={() => {
+                  setShowCommentsModal(false);
+                  setNewCommentText('');
+                  Keyboard.dismiss();
+                }}>
+                  <Ionicons name="close" size={24} color={colors.primary} />
+                </TouchableOpacity>
               </View>
-            ) : (
+
               <FlatList
+                ref={scrollViewRef}
                 data={commentaires}
                 keyExtractor={(item) => item.id}
                 renderItem={({ item }) => (
@@ -527,26 +558,59 @@ export default function HomeScreen() {
                 ListEmptyComponent={
                   <Text style={[styles.noCommentsText, { color: colors.textSecondary }]}>Aucun commentaire pour l'instant</Text>
                 }
+                contentContainerStyle={{ paddingBottom: 80 }}
               />
-            )}
 
-            <View style={[styles.addCommentSection, { borderTopColor: colors.border, backgroundColor: colors.surface }]}>
-              <TextInput
-                style={[styles.modalCommentInput, { borderColor: colors.border, backgroundColor: colors.background, color: colors.text }]}
-                placeholder="Écrire un commentaire..."
-                placeholderTextColor={colors.textSecondary}
-                value={newCommentText}
-                onChangeText={setNewCommentText}
-                multiline
-              />
-              <TouchableOpacity 
-                style={styles.sendButton} 
-                onPress={handleAddCommentInModal}
-              >
-                <Ionicons name="send" size={24} color={colors.primary} />
-              </TouchableOpacity>
+              {/* Section d'ajout de commentaire - qui suit le clavier */}
+              <View style={[styles.addCommentSection, { borderTopColor: colors.border, backgroundColor: colors.surface }]}>
+                <View style={styles.commentInputWrapper}>
+                  <TextInput
+                    ref={inputRef}
+                    style={[styles.modalCommentInput, { borderColor: colors.border, backgroundColor: colors.background, color: colors.text }]}
+                    placeholder="Écrire un commentaire..."
+                    placeholderTextColor={colors.textSecondary}
+                    value={newCommentText}
+                    onChangeText={setNewCommentText}
+                    multiline
+                    blurOnSubmit={false}
+                    returnKeyType="send"
+                    onSubmitEditing={handleAddCommentInModal}
+                  />
+                  <TouchableOpacity 
+                    style={[styles.sendButton, !newCommentText.trim() && styles.sendButtonDisabled]} 
+                    onPress={handleAddCommentInModal}
+                    disabled={!newCommentText.trim()}
+                  >
+                    <Ionicons name="send" size={24} color={newCommentText.trim() ? colors.primary : colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+              </View>
             </View>
-          </View>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Modal Image Plein Écran */}
+      <Modal
+        visible={fullImageVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setFullImageVisible(false)}
+      >
+        <View style={styles.fullImageContainer}>
+          <TouchableOpacity 
+            style={styles.closeImageButton} 
+            onPress={() => setFullImageVisible(false)}
+          >
+            <Ionicons name="close-circle" size={40} color="#fff" />
+          </TouchableOpacity>
+          {selectedImage && (
+            <Image 
+              source={{ uri: selectedImage }} 
+              style={styles.fullImage}
+              resizeMode="contain"
+            />
+          )}
         </View>
       </Modal>
     </View>
@@ -585,8 +649,16 @@ const styles = StyleSheet.create({
   actionText: { marginLeft: 6, fontSize: 14 },
   fabContainer: { position: 'absolute', right: 20 },
   fabButton: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 5 },
-  modalContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { borderTopLeftRadius: 20, borderTopRightRadius: 20, height: '80%', paddingTop: 16 },
+  modalContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+  keyboardAvoidingView: { flex: 1 },
+  modalContent: { 
+    borderTopLeftRadius: 20, 
+    borderTopRightRadius: 20, 
+    height: '90%', 
+    paddingTop: 16,
+    display: 'flex',
+    flexDirection: 'column',
+  },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1 },
   modalTitle: { fontSize: 18, fontWeight: 'bold' },
   commentsLoading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
@@ -600,7 +672,17 @@ const styles = StyleSheet.create({
   commentText: { fontSize: 14, marginBottom: 4 },
   commentDate: { fontSize: 10 },
   noCommentsText: { textAlign: 'center', paddingVertical: 40 },
-  addCommentSection: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1 },
-  modalCommentInput: { flex: 1, borderWidth: 1, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, fontSize: 14, marginRight: 8, maxHeight: 80 },
-  sendButton: { padding: 8 },
+  addCommentSection: { 
+    paddingHorizontal: 16, 
+    paddingVertical: 12, 
+    borderTopWidth: 1,
+    backgroundColor: '#fff',
+  },
+  commentInputWrapper: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
+  modalCommentInput: { flex: 1, borderWidth: 1, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, fontSize: 14, maxHeight: 100, textAlignVertical: 'center' },
+  sendButton: { padding: 8, justifyContent: 'center', alignItems: 'center' },
+  sendButtonDisabled: { opacity: 0.5 },
+  fullImageContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' },
+  closeImageButton: { position: 'absolute', top: 50, right: 20, zIndex: 10 },
+  fullImage: { width: '100%', height: '100%' },
 });

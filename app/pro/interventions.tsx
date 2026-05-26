@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, RefreshControl, Alert, Modal, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, RefreshControl, Alert, Modal, TextInput, Linking, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { supabase } from '../lib/supabase';
@@ -40,6 +40,29 @@ export default function ProInterventionsScreen() {
   const [formData, setFormData] = useState<any>({});
   const [existingDetails, setExistingDetails] = useState<any>(null);
   const [saving, setSaving] = useState(false);
+
+  // Fonction pour ouvrir Google Maps
+  const openInGoogleMaps = async (localisation: string) => {
+    try {
+      const encodedAddress = encodeURIComponent(localisation);
+      const url = Platform.select({
+        ios: `maps://maps.apple.com/?q=${encodedAddress}`,
+        android: `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`
+      }) || `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+      
+      const supported = await Linking.canOpenURL(url);
+      
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        const webUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+        await Linking.openURL(webUrl);
+      }
+    } catch (error) {
+      console.error('Erreur ouverture carte:', error);
+      Alert.alert('Erreur', 'Impossible d\'ouvrir la carte');
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -391,6 +414,7 @@ export default function ProInterventionsScreen() {
     }
   };
 
+  // HandleRefuser MODIFIÉ - Rend le professionnel disponible après refus
   const handleRefuser = async (id: string, intervention: InterventionItem) => {
     Alert.alert(
       'Refus',
@@ -400,6 +424,7 @@ export default function ProInterventionsScreen() {
         {
           text: 'Oui',
           onPress: async () => {
+            // 1. Mettre à jour le statut de l'intervention
             const { error } = await supabase
               .from('intervention')
               .update({ statut: 'refusee' })
@@ -408,7 +433,15 @@ export default function ProInterventionsScreen() {
             if (error) {
               Alert.alert('Erreur', error.message);
             } else {
-              // NOTIFICATIONS
+              // 2. Rendre le professionnel à nouveau DISPONIBLE
+              if (proId) {
+                await supabase
+                  .from('professionnel_sante')
+                  .update({ disponibilite: 'disponible' })
+                  .eq('id', proId);
+              }
+              
+              // 3. NOTIFICATIONS
               const adminId = await getAdminId();
               
               // Notification à l'admin
@@ -426,7 +459,7 @@ export default function ProInterventionsScreen() {
               await createNotification(
                 intervention.patient_id,
                 '❌ Intervention refusée',
-                `Votre intervention a été refusée. Nous cherchons un autre professionnel.`,
+                `Votre intervention a été refusée. L'administrateur va vous réorienter vers un autre professionnel.`,
                 'intervention_refusee_patient',
                 { intervention_id: id }
               );
@@ -936,9 +969,15 @@ export default function ProInterventionsScreen() {
                     <Text style={[styles.info, { color: colors.textSecondary }]}>
                       👤 Patient: {item.patient_prenom} {item.patient_nom}
                     </Text>
-                    <Text style={[styles.info, { color: colors.textSecondary }]}>
-                      📍 Adresse: {item.localisation}
-                    </Text>
+                    {/* Localisation cliquable */}
+                    <TouchableOpacity 
+                      style={styles.locationContainer}
+                      onPress={() => openInGoogleMaps(item.localisation)}
+                    >
+                      <Ionicons name="location-sharp" size={16} color={colors.primary} />
+                      <Text style={[styles.info, styles.locationText, { color: colors.primary }]}>📍 {item.localisation}</Text>
+                      <Ionicons name="open-outline" size={14} color={colors.primary} />
+                    </TouchableOpacity>
                     <Text style={[styles.info, { color: colors.textSecondary }]}>
                       📞 Tél: {item.patient_telephone}
                     </Text>
@@ -1085,6 +1124,18 @@ const styles = StyleSheet.create({
   cardDate: { fontSize: 12, marginTop: 2 },
   cardBody: { padding: 15, borderTopWidth: 1 },
   info: { fontSize: 14, marginBottom: 6 },
+  locationContainer: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginBottom: 6,
+    paddingVertical: 4,
+    gap: 6
+  },
+  locationText: { 
+    flex: 1,
+    textDecorationLine: 'underline',
+    marginBottom: 0
+  },
   statutBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 },
   statutText: { color: '#fff', fontSize: 10, fontWeight: '600' },
   buttonContainer: { flexDirection: 'row', marginTop: 12, gap: 10 },

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Modal, FlatList, TextInput, RefreshControl } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Modal, FlatList, TextInput, RefreshControl, Linking, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../context/ThemeContext';
@@ -89,12 +89,34 @@ export default function AdminDemandesScreen() {
   const [activeSection, setActiveSection] = useState<'encours' | 'terminees'>('encours');
   const [proToLiberate, setProToLiberate] = useState<Professionnel | null>(null);
 
+  // Fonction pour ouvrir Google Maps
+  const openInGoogleMaps = async (localisation: string) => {
+    try {
+      const encodedAddress = encodeURIComponent(localisation);
+      const url = Platform.select({
+        ios: `maps://maps.apple.com/?q=${encodedAddress}`,
+        android: `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`
+      }) || `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+      
+      const supported = await Linking.canOpenURL(url);
+      
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        const webUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+        await Linking.openURL(webUrl);
+      }
+    } catch (error) {
+      console.error('Erreur ouverture carte:', error);
+      Alert.alert('Erreur', 'Impossible d\'ouvrir la carte');
+    }
+  };
+
   useEffect(() => {
     loadInterventions();
-    checkMaterialStock(); // Vérifier les stocks au chargement
+    checkMaterialStock();
   }, []);
 
-  // Vérifier les stocks de matériel
   const checkMaterialStock = async () => {
     const { data: materiels } = await supabase
       .from('materiel_medical')
@@ -465,7 +487,6 @@ export default function AdminDemandesScreen() {
         return false;
       }
       
-      // Mise à jour du stock
       if (machineId) {
         const { data: materiel } = await supabase
           .from('materiel_medical')
@@ -480,7 +501,6 @@ export default function AdminDemandesScreen() {
             .update({ quantite: nouvelleQuantite })
             .eq('id', machineId);
           
-          // Notification stock faible
           await notifyStockAlerte(machineId, materiel.nom_m, nouvelleQuantite);
         }
       }
@@ -497,7 +517,6 @@ export default function AdminDemandesScreen() {
       const symptomesList = symptomes[selectedIntervention.id] || [];
       const patient = selectedIntervention.patient;
       
-      // NOTIFICATION 1: Au professionnel
       let messagePro = `🆕 NOUVELLE INTERVENTION\n\n`;
       messagePro += `👤 Patient: ${patient.prenom} ${patient.nom}\n`;
       messagePro += `📍 Adresse: ${selectedIntervention.localisation}\n`;
@@ -516,7 +535,6 @@ export default function AdminDemandesScreen() {
         { intervention_id: selectedIntervention.id }
       );
       
-      // NOTIFICATION 2: Au patient
       await createNotification(
         patient.id,
         '✅ Intervention orientée',
@@ -525,7 +543,6 @@ export default function AdminDemandesScreen() {
         { intervention_id: selectedIntervention.id }
       );
       
-      // NOTIFICATION 3: À l'admin (confirmation)
       const adminId = await getAdminId();
       if (adminId) {
         await createNotification(
@@ -640,6 +657,28 @@ export default function AdminDemandesScreen() {
     setSelectedMateriel(null);
   };
 
+  // Fonction pour réorienter une intervention refusée
+  const handleReorienter = async (intervention: InterventionItem) => {
+    // Réinitialiser le professionnel et le statut
+    const { error } = await supabase
+      .from('intervention')
+      .update({ 
+        professionnel_id: null,
+        statut: 'en_attente'
+      })
+      .eq('id', intervention.id);
+    
+    if (error) {
+      Alert.alert('Erreur', error.message);
+      return;
+    }
+    
+    // Ouvrir le modal pour choisir un nouveau professionnel
+    setSelectedIntervention(intervention);
+    setShowProModal(true);
+    await loadProfessionnels();
+  };
+
   const openProModal = async (intervention: InterventionItem) => {
     setSelectedIntervention(intervention);
     setShowProModal(true);
@@ -669,6 +708,7 @@ export default function AdminDemandesScreen() {
       case 'en_attente': return { label: 'En attente', color: '#ff8800' };
       case 'affectee': return { label: 'Affectée', color: '#5aadbf' };
       case 'terminee': return { label: 'Terminée', color: '#4CAF50' };
+      case 'refusee': return { label: 'Refusée', color: '#ff4444' };
       default: return { label: statut, color: '#999' };
     }
   };
@@ -695,6 +735,7 @@ export default function AdminDemandesScreen() {
     const isExpanded = expandedId === item.id;
     const isConsultation = item.type_intervention === 'consultation';
     const aDesMaladies = item.patient.maladies_chronique && item.patient.maladies_chronique !== '[]' && item.patient.maladies_chronique !== 'null';
+    const estRefusee = item.statut === 'refusee';
     
     return (
       <View key={item.id} style={[styles.card, { backgroundColor: colors.surface }]}>
@@ -713,7 +754,7 @@ export default function AdminDemandesScreen() {
                 <Text style={[styles.maladiesText, { color: '#ff8800' }]}>🏥 Maladies chroniques</Text>
               )}
             </View>
-            {prioriteInfo && !isTerminee && (
+            {prioriteInfo && !isTerminee && !estRefusee && (
               <View style={[styles.prioriteBadge, { backgroundColor: prioriteInfo.color + '20' }]}>
                 <Text style={[styles.prioriteText, { color: prioriteInfo.color }]}>{prioriteInfo.label}</Text>
               </View>
@@ -731,10 +772,19 @@ export default function AdminDemandesScreen() {
 
         {isExpanded && (
           <View style={[styles.cardBody, { borderTopColor: colors.border }]}>
-            <Text style={[styles.info, { color: colors.textSecondary }]}>📍 {item.localisation}</Text>
+            {/* Localisation cliquable */}
+            <TouchableOpacity 
+              style={styles.locationContainer}
+              onPress={() => openInGoogleMaps(item.localisation)}
+            >
+              <Ionicons name="location-sharp" size={16} color={colors.primary} />
+              <Text style={[styles.info, styles.locationText, { color: colors.primary }]}>📍 {item.localisation}</Text>
+              <Ionicons name="open-outline" size={14} color={colors.primary} />
+            </TouchableOpacity>
+            
             <Text style={[styles.info, { color: colors.textSecondary }]}>📅 {item.date_demande}</Text>
             
-            {isConsultation && prioriteInfo && !isTerminee && (
+            {isConsultation && prioriteInfo && !isTerminee && !estRefusee && (
               <View style={[styles.urgenceBanner, { backgroundColor: prioriteInfo.color + '15', borderLeftColor: prioriteInfo.color }]}>
                 <Text style={[styles.urgenceBannerText, { color: prioriteInfo.color }]}>
                   ⚡ {prioriteInfo.label} ⚡
@@ -763,8 +813,17 @@ export default function AdminDemandesScreen() {
               </View>
             )}
 
-            {item.professionnel_nom && item.professionnel_nom !== 'Non affecté' && (
+            {item.professionnel_nom && item.professionnel_nom !== 'Non affecté' && !estRefusee && (
               <Text style={[styles.info, { color: colors.textSecondary }]}>👨‍⚕️ Professionnel: {item.professionnel_nom}</Text>
+            )}
+
+            {estRefusee && (
+              <View style={[styles.refuseBanner, { backgroundColor: '#ff444415' }]}>
+                <Ionicons name="close-circle" size={20} color="#ff4444" />
+                <Text style={[styles.refuseBannerText, { color: '#ff4444' }]}>
+                  Cette intervention a été refusée par le professionnel
+                </Text>
+              </View>
             )}
 
             <View style={styles.detailsSection}>
@@ -804,10 +863,18 @@ export default function AdminDemandesScreen() {
               )}
             </View>
 
+            {/* Boutons d'action */}
             {!isTerminee && item.statut === 'en_attente' && (
               <TouchableOpacity style={[styles.orienterButton, { backgroundColor: colors.primary }]} onPress={() => openProModal(item)}>
                 <Ionicons name="send-outline" size={20} color="#fff" />
                 <Text style={styles.orienterButtonText}>Orienter un professionnel</Text>
+              </TouchableOpacity>
+            )}
+
+            {!isTerminee && item.statut === 'refusee' && (
+              <TouchableOpacity style={[styles.reorienterButton, { backgroundColor: '#ff8800' }]} onPress={() => handleReorienter(item)}>
+                <Ionicons name="refresh-outline" size={20} color="#fff" />
+                <Text style={styles.orienterButtonText}>Réorienter (autre professionnel)</Text>
               </TouchableOpacity>
             )}
 
@@ -1066,6 +1133,18 @@ const styles = StyleSheet.create({
   statutText: { color: '#fff', fontSize: 10, fontWeight: '600' },
   cardBody: { paddingTop: 12, borderTopWidth: 1, marginTop: 8, gap: 6, borderTopColor: '#eee' },
   info: { fontSize: 13 },
+  locationContainer: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginBottom: 6,
+    paddingVertical: 4,
+    gap: 6
+  },
+  locationText: { 
+    flex: 1,
+    textDecorationLine: 'underline',
+    marginBottom: 0
+  },
   urgenceBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 10, marginVertical: 8, borderRadius: 8, borderLeftWidth: 4 },
   urgenceBannerText: { fontSize: 14, fontWeight: 'bold' },
   urgenceDetail: { fontSize: 11, fontStyle: 'italic' },
@@ -1080,9 +1159,12 @@ const styles = StyleSheet.create({
   intensiteBadgeText: { fontSize: 11, fontWeight: '600' },
   noDetailsText: { fontSize: 12, textAlign: 'center', paddingVertical: 8 },
   orienterButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 10, marginTop: 10, gap: 8 },
+  reorienterButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 10, marginTop: 10, gap: 8 },
   orienterButtonText: { color: '#fff', fontSize: 13, fontWeight: '600' },
   infoMessage: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 10, marginTop: 10, gap: 8 },
   infoMessageText: { fontSize: 12 },
+  refuseBanner: { flexDirection: 'row', alignItems: 'center', padding: 10, borderRadius: 8, marginVertical: 8, gap: 8 },
+  refuseBannerText: { fontSize: 13, fontWeight: '500', flex: 1 },
   emptyContainer: { alignItems: 'center', paddingVertical: 60 },
   emptyText: { fontSize: 16, marginTop: 16 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },

@@ -22,11 +22,10 @@ function RootNavigator() {
 
   useEffect(() => {
     const initialize = async () => {
-      // Enregistrer les notifications push
+      // Enregistrer les notifications push (fonctionne en APK)
       if (Platform.OS !== 'web') {
         const token = await registerForPushNotificationsAsync();
         
-        // Sauvegarder le token dans la base de données
         if (token) {
           const { data: { session } } = await supabase.auth.getSession();
           if (session?.user) {
@@ -45,19 +44,8 @@ function RootNavigator() {
 
   // Écouter les notifications reçues
   useEffect(() => {
-    const subscription = Notifications.addNotificationReceivedListener(notification => {
-      console.log('Notification reçue:', notification);
-    });
-
-    const responseSubscription = Notifications.addNotificationResponseReceivedListener(response => {
-      const data = response.notification.request.content.data;
-      console.log('Notification cliquée:', data);
-      
-      // Gérer la navigation selon le type de notification
-      if (data?.type === 'intervention_orientee') {
-        // Navigation vers les détails de l'intervention
-      }
-    });
+    const subscription = Notifications.addNotificationReceivedListener(() => {});
+    const responseSubscription = Notifications.addNotificationResponseReceivedListener(() => {});
 
     return () => {
       subscription.remove();
@@ -74,15 +62,21 @@ function RootNavigator() {
   }
 
   return (
-    <Stack>
+    <Stack
+      screenOptions={{
+        headerBackTitle: 'Retour',
+        headerBackVisible: true,
+        headerStyle: { backgroundColor: colors.surface },
+        headerTintColor: colors.primary,
+        headerTitleStyle: { color: colors.text },
+      }}
+    >
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="auth/login" options={{ headerShown: false }} />
       <Stack.Screen name="auth/signup" options={{ headerShown: false }} />
       <Stack.Screen name="patient" options={{ headerShown: false }} />
       <Stack.Screen name="pro" options={{ headerShown: false }} />
       <Stack.Screen name="Adm" options={{ headerShown: false }} />
-      <Stack.Screen name="home/add-post" options={{ headerShown: false }} />
-      <Stack.Screen name="home/index" options={{ headerShown: false }} />
     </Stack>
   );
 }
